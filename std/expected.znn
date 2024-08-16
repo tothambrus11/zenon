@@ -89,6 +89,14 @@ E get_error(expected<T, E> v) {
   }
 }
 
+export template <T, E>
+expected<T, E> with_error(T? t, E error) {
+  if (t)
+    return *move(t);
+  else
+    return move(error);
+}
+
 export template <T, E> requires copy<T>, copy<E>
 expected<E, T> flip(expected<T, E>* v) {
   switch (*v) {
@@ -132,9 +140,9 @@ T operator ?? (expected<T, U> elem, Fun f) {
 }
 
 export template <T, U, V, Fun> requires invoke<Fun, V, U>
-expected<T, V> map_error(expected<T, U> elem, Fun f) {
+expected<T, V> map_error(expected<T, U> elem, Fun* f) {
   if (elem)
     return *move(elem);
   else
-    return f(get_error(move(elem)));
+    return f^(get_error(move(elem)));
 }
