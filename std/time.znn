@@ -1,6 +1,8 @@
 
 embed {
 #include <sys/time.h>
+#include <chrono>
+#include <thread>
 }
 
 using milliseconds_t = long;
@@ -9,4 +11,8 @@ export milliseconds_t current_time_milli() embed {
   timeval t;
   gettimeofday(&t, nullptr);
   return t.tv_sec * 1000 + t.tv_usec / 1000;
+}
+
+export void sleep_for(milliseconds_t t) embed {
+  std::this_thread::sleep_for(std::chrono::milliseconds{t});
 }
