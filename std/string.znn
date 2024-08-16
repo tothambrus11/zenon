@@ -13,75 +13,44 @@ extern int size(string*);
 export [@member]
 extern bool empty(string*);
 
-export [@member]
-extern string substring(string*, int start, int length);
-
-export string substring(string* s, int start) {
-  return s^.substring(start, s^.size() - start);
-}
-
 export string suffix(string* s, int length) {
-  return s^.substring(s^.size() - length);
+  return s^.substring(s^.end() - length);
 }
 
 export string prefix(string* s, int length) {
-  return s^.substring(0, length);
+  return s^.substring(s^.begin(), length);
 }
 
-export bool starts_with(string* s, string* prefix) {
-  if (prefix^.size() > s^.size())
-    return false;
-  for (c : *prefix)
-    if (*c != s^[c.index])
-      return false;
-  return true;
+export bool starts_with(string* s, string* suffix) {
+  return s^.begin().is_prefix(suffix^.begin());
 }
 
 export bool ends_with(string* s, string* suffix) {
-  if (suffix^.size() > s^.size())
-    return false;
-  for (c : *suffix)
-    if (*c != s^[s^.size() - suffix^.size() + c.index])
-      return false;
-  return true;
+  return s^.end().is_suffix(suffix^.end());
 }
 
-export bool contains(string* s, int start, string* substring) {
-  if (substring^.size() + start > s^.size())
-    return false;
-  for (c : *substring)
-    if (*c != s^[start + c.index])
-      return false;
-  return true;
+export bool contains(string* s, string_iterator it, string* substring) {
+  return it.is_prefix(substring^.begin());
 }
 
-export string insert(string* s, int start, string content) {
-  return s^.substring(0, start) + move(content) + s^.substring(start, s^.size() - start);
+export bool contains_slow(string* s, int index, string* substring) {
+  return s^.contains(s^.begin() + index, substring);
 }
 
-export int? find(string* s, string pattern) {
+export string insert(string* s, string_iterator start, string content) {
+  return s^.substring(s^.begin(), start) + move(content) + s^.substring(start);
+}
+
+export string insert_slow(string* s, int start, string content) {
+  return s^.insert(s^.begin() + start, move(content));
+}
+
+export string_iterator? find(string* s, string pattern) {
   return s^.find(&pattern);
 }
 
-export int? find(string* s, int start, string pattern) {
-  return s^.find(start, &pattern);
-}
-
-export int? find(string* s, string* pattern) {
-  return s^.find(0, pattern);
-}
-
-export int? find(string* s, int start, string* pattern) {
-  const matches = [&](int index) {
-    for (i : range(0, pattern^.size()))
-      if (s^[index + i] != pattern^[i])
-        return false;
-    return true;
-  };
-  for (i : range(start, s^.size() - pattern^.size() + 1))
-    if (matches(i))
-      return i;
-  return null;
+export string_iterator? find(string* s, string* pattern) {
+  return s^.find(s^.begin(), pattern);
 }
 
 export string? replace(string* s, string* pattern, string* by) {
@@ -100,6 +69,9 @@ export string? replace(string* s, string* pattern, string* by) {
 export [@member]
 extern char operator [](string*, int index);
 
+[@member]
+extern char chat_at_index(string*, int char_index);
+
 export byte[] slice(string* s) embed {
   return slice_t<int8_t>{(int8_t*)&s->data()[0], (int8_t*)&s->data()[s->buffer_size()]};
 }
@@ -110,32 +82,6 @@ export int get_hash(string* s) {
 
 embed {
 #include <cstdlib>
-}
-
-export int? to_int(string* s) {
-  const int? err = null;
-  if (s^.empty())
-    return err;
-  embed {
-    char* control;
-    int result = std::strtol(s->data(), &control, 0);
-    if (control != s->data() + s->size())
-      return err;
-    return result;
-  }
-}
-
-export double? to_double(string* s) {
-  const double? err = null;
-  if (s^.empty())
-    return err;
-  embed {
-    char* control;
-    double result = std::strtod(s->data(), &control);
-    if (control != s->data() + s->size())
-      return err;
-    return result;
-  }
 }
 
 export struct string_iterator {
@@ -151,24 +97,124 @@ export string_iterator begin(string* s) {
 }
 
 export string_iterator end(string* s) embed {
-  return string_iterator{*s, s->buffer_size(), 0};
+  return string_iterator{*s, s->buffer_size(), s->size()};
 }
 
 export char operator *(string_iterator* it) embed {
   return it->v.char_at_index(it->char_index);
 }
 
-export string_iterator operator ++(string_iterator mutable* it) embed {
+export void operator ++(string_iterator mutable* it) embed {
   it->char_index = it->v.next_char(it->char_index);
+  if (it->char_index > it->v.buffer_size())
+    throw std::runtime_error("Incremented string iterator beyond bounds");
   ++it->index;
-  return *it;
+}
+
+export void operator --(string_iterator mutable* it) embed {
+  it->char_index = it->v.prev_char(it->char_index);
+  if (it->index <= 0)
+    throw std::runtime_error("Decremented string iterator beyond bounds");
+  --it->index;
+}
+
+export string_iterator operator +(mutable string_iterator it, int increment) {
+  if (increment < 0)
+    return it - (-increment);
+  embed {
+    for (int i = 0; i < increment; ++i) {
+      if (it.char_index == it.v.buffer_size())
+        break;
+      it.char_index = it.v.next_char(it.char_index);
+      ++it.index;
+    }
+    return it;
+  }
+}
+
+export string_iterator operator -(mutable string_iterator it, int decrement) {
+  if (decrement < 0)
+    return it + (-decrement);
+  embed {
+    for (int i = 0; i < decrement; ++i) {
+      if (it.char_index == 0)
+        break;
+      it.char_index = it.v.prev_char(it.char_index);
+      --it.index;
+    }
+    return it;
+  }
 }
 
 export bool operator == (string_iterator* it1, string_iterator* it2) {
   return it1^.char_index == it2^.char_index;
 }
 
-export string substring(string_iterator* begin, string_iterator end) {
-  return begin^.v.substring(begin^.index, end.index - begin^.index);
+export bool operator < (string_iterator* it1, string_iterator* it2) {
+  return it1^.char_index < it2^.char_index;
 }
 
+export string substring(string* s, string_iterator begin, string_iterator end) embed {
+  return s->substring(begin.char_index, end.char_index);
+}
+
+export string substring_slow(string* s, int begin, int length) {
+  return s^.substring(s^.begin() + begin, s^.begin() + begin + length);
+}
+
+export string substring(string* s, string_iterator start, int length) {
+  return s^.substring(start, start + length);
+}
+
+export string substring(string* s, string_iterator start) {
+  return s^.substring(start, s^.end());
+}
+
+export string substring_slow(string* s, int start) {
+  return s^.substring(s^.begin() + start, s^.end());
+}
+
+bool is_prefix(mutable string_iterator s, mutable string_iterator prefix) {
+  while (prefix != prefix.v.end()) {
+    if (s == s.v.end() || *s != *prefix)
+      return false;
+    ++s;
+    ++prefix;
+  }
+  return true;
+}
+
+bool is_suffix(mutable string_iterator s, mutable string_iterator suffix) {
+  while (true) {
+    if (suffix == suffix.v.begin())
+      break;
+    if (s == s.v.begin())
+      return false;
+    --s;
+    --suffix;
+    if (*suffix != *s)
+      return false;
+  }
+  return true;
+}
+
+export string_iterator? find(string* s, string_iterator start, string pattern) {
+  return s^.find(move(start), &pattern);
+}
+
+export string_iterator? find_slow(string* s, int start, string pattern) {
+  return s^.find(s^.begin() + start, &pattern);
+}
+
+export string_iterator? find(string* s, mutable string_iterator start, string* pattern) {
+  while (start != s^.end()) {
+    if (start.is_prefix(pattern^.begin()))
+      return move(start);
+    ++start;
+  }
+  return null;
+}
+
+export string_iterator? find_slow(string* s, int start, string* pattern) {
+  return s^.find(s^.begin() + start, pattern);
+}
