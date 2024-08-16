@@ -126,11 +126,15 @@ T pop_back(vector<T> mutable* v) embed {
   return std::move(t);
 }
 
-export [@member] template <T>
-extern T* operator [](vector<T>* v, int index);
+export template <T>
+T* operator [](vector<T>* v, int index) embed {
+  return &v->at(index);
+}
 
-export [@member] template <T>
-extern T mutable* operator [](vector<T> mutable* v, int index);
+export template <T>
+T mutable* operator [](vector<T> mutable* v, int index) embed {
+  return &v->at(index);
+}
 
 export template <T>
 T operator [](mutable vector<T> v, int index) {
