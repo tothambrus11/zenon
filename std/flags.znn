@@ -11,25 +11,22 @@ struct flag_info {
 };
 
 flag_info!string parse_flag(string flag) {
-  mutable start = 0;
+  mutable start = flag.begin();
   const error = "Command line flag badly formated: '{flag}'";
-  while (flag[start] == '-' && start < flag.size())
+  while (*start == '-' && start < flag.end())
     ++start;
-  if (start >= flag.size())
+  if (start == flag.end())
     return error;
-  for (index : range(start, flag.size()))
-    if (flag[index] == '=') {
-      if (index == start || index == flag.size() - 1)
+  for (index = start; index != flag.end(); ++index)
+    if (*index == '=') {
+      if (index == start || index == flag.end() - 1)
         return error;
       return flag_info(
-          flag.substring(start, index - start),
-          flag.substring(index + 1, flag.size() - index - 1)
+          flag.substring(start, index),
+          flag.substring(index + 1)
       );
     }
-  return flag_info(
-      flag.substring(start, flag.size() - start),
-      null
-  );
+  return flag_info(flag.substring(start), null);
 }
 
 export struct flag_map {
