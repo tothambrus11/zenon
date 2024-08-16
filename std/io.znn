@@ -2,6 +2,7 @@
 export import "expected.znn";
 import "std/time.znn";
 import "std/optional.znn";
+import "std/vector.znn";
 
 export embed{
 #include <cstdio>
@@ -11,6 +12,9 @@ export embed{
 embed {
 #include <cstdlib>
 #include <climits>
+#include <filesystem>
+#include <sys/types.h>
+#include <sys/stat.h>
 }
 
 export string to_string(int* i) embed {
@@ -149,6 +153,24 @@ export double? scan_double(file_input* f) {
   return scan_impl<double>(f, "%lf");
 }
 
+template <T>
+T? scan_string_impl(string* s, string format) {
+  embed {
+    T ret;
+    if (sscanf(s->data(), format.data(), &ret) == 1)
+      return ret;
+  }
+  return null;
+}
+
+export int? to_int(string* f) {
+  return scan_string_impl<int>(f, "%d");
+}
+
+export double? to_double(string* f) {
+  return scan_string_impl<double>(f, "%lf");
+}
+
 export string? scan_string(file_input* f, int max_length) {
   const format = "%{max_length}s";
   embed {
@@ -194,4 +216,14 @@ export string? remove_file(string path) {
       return lite_str::reference(strerror(errno));
   }
   return null;
+}
+
+export vector<string> list_files(string dir) {
+  mutable ret = vector<string>();
+  embed {
+    for (auto& f : std::filesystem::directory_iterator(dir.data()))
+      if (f.is_regular_file())
+        ret.push_back(lite_str::owned(f.path().c_str()));
+  }
+  return move(ret);
 }
