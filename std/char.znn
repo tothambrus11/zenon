@@ -54,4 +54,8 @@ export bool isblank(char c) embed {
   return isblank(c);
 }
 
-
+export int? to_digit(char c) embed {
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  return zenon::optional<int>(null);;
+}
