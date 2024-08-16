@@ -40,6 +40,7 @@ class lite_str {
   const char_type *ptr;
   typedef int32_t length_t;
   length_t length;
+  length_t utf_length = 0;
   enum Type {
     OWNED,
     REFERENCE
@@ -67,6 +68,7 @@ class lite_str {
     lite_str ret;
     ret.ptr = s;
     ret.length = strlen(s);
+    ret.calculate_size();
     return ret;
   }
 
@@ -74,6 +76,7 @@ class lite_str {
     lite_str ret;
     auto buf = ret.create_buffer(strlen(s));
     strcpy(buf, s);
+    ret.calculate_size();
     return ret;
   }
 
@@ -101,6 +104,7 @@ class lite_str {
     ptr = other.ptr;
     type = other.type;
     length = other.length;
+    utf_length = other.utf_length;
     // This stops o from decreasing the ref counter if there is one
     other.type = REFERENCE;
   }
@@ -109,6 +113,7 @@ class lite_str {
     ptr = other.ptr;
     type = other.type;
     length = other.length;
+    utf_length = other.utf_length;
     if (type == OWNED)
       ++get_ref_counter();
   }
@@ -164,6 +169,13 @@ class lite_str {
     return length;
   }
 
+  int prev_char(int index) const {
+    do {
+      --index;
+    } while (index > 0 && (ptr[index] & 0x80) && (ptr[index] & 0xC0) != 0xC0);
+    return index;
+  }
+
   int next_char(int index) const {
     unsigned char c = ptr[index];
     auto jump = [&] {
@@ -184,13 +196,16 @@ class lite_str {
   }
 
   length_t size() const {
-    int res = 0;
+    return utf_length;
+  }
+
+  void calculate_size() {
     int index = 0;
+    utf_length = 0;
     while (ptr[index] != '\0') {
       index = next_char(index);
-      ++res;
+      ++utf_length;
     }
-    return res;
   }
 
   bool empty() const {
@@ -201,18 +216,11 @@ class lite_str {
     return ptr;
   }
 
-  lite_str substring(int index, int count) const {
-    int buf_index = 0;
-    for (int i = 0; i < index && buf_index < length; ++i) {
-      buf_index = next_char(buf_index);
-    }
-    int buf_end = buf_index;
-    for (int i = 0; i < count && buf_end < length; ++i) {
-      buf_end = next_char(buf_end);
-    }
+  lite_str substring(int buf_index, int buf_end) const {
     lite_str ret;
     auto buf = ret.create_buffer(buf_end - buf_index);
     memcpy(buf, ptr + buf_index, (buf_end - buf_index) * sizeof(char_type));
+    ret.calculate_size();
     return ret;
   }
 };
@@ -224,6 +232,7 @@ inline lite_str concatenate(const lite_str::char_type* s1, const lite_str::char_
   auto buf = ret.create_buffer(l1 + l2);
   memcpy(buf, s1, l1 * sizeof(lite_str::char_type));
   memcpy(buf + l1 * sizeof(lite_str::char_type), s2, (l2 + 1) * sizeof(lite_str::char_type));
+  ret.calculate_size();
   return ret;
 }
 
